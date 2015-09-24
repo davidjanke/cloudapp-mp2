@@ -119,11 +119,22 @@ public class PopularityLeague extends Configured implements Tool {
 
 		private static final String ID_DIVIDER = ":";
 
+		Set<Integer> league = new HashSet<>();
+
+		@Override
+		protected void setup(Context context) throws IOException,InterruptedException {
+			Configuration conf = context.getConfiguration();
+			String stopWordsPath = conf.get("league");
+			league.addAll(getLeaugeIds(readHDFSFile(stopWordsPath, conf)));
+		}
+
 		@Override
 		public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
 
 			for(Integer linkedPageId : getLinkedPageIDs(value.toString())) {
-				context.write(new IntWritable(linkedPageId), ONE);
+				if(league.contains(linkedPageId)) {
+					context.write(new IntWritable(linkedPageId), ONE);
+				}
 			}        
 		}
 
@@ -147,26 +158,15 @@ public class PopularityLeague extends Configured implements Tool {
 	}
 
 	public static class LinkCountReduce extends Reducer<IntWritable, IntWritable, IntWritable, IntWritable> {
-		Set<Integer> league = new HashSet<>();
-
-		@Override
-		protected void setup(Context context) throws IOException,InterruptedException {
-			Configuration conf = context.getConfiguration();
-			String stopWordsPath = conf.get("league");
-			league.addAll(getLeaugeIds(readHDFSFile(stopWordsPath, conf)));
-		}
 
 		@Override
 		protected void reduce(IntWritable key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
-			if(league.contains(key.get())) {
 				int sum = 0;
 				for(IntWritable count : values) {
 					sum += count.get();
 				}
 
 				context.write(key, new IntWritable(sum));
-			}
-
 		}
 	}
 
@@ -212,7 +212,12 @@ public class PopularityLeague extends Configured implements Tool {
 		}
 
 		private Integer determineRank(LinkCount linkCount) {
-			int numberOfSmallerElements = topLinks.headSet(linkCount).size();
+			int numberOfSmallerElements = 0;
+			for(LinkCount item:topLinks) {
+				if(item.getCount() < linkCount.getCount()) {
+					numberOfSmallerElements++;
+				}
+			}
 			return numberOfSmallerElements;
 		}
 
@@ -239,11 +244,6 @@ class LinkCount extends Pair<Integer, Integer> {
 
 	public Integer getId() {
 		return second;
-	}
-
-	@Override
-	public int compareTo(Pair<Integer, Integer> o) {
-		return first.compareTo(o.first);
 	}
 
 }
