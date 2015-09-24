@@ -1,5 +1,14 @@
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.StringTokenizer;
+import java.util.TreeSet;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -18,14 +27,6 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.util.Arrays;
-import java.util.List;
-import java.util.StringTokenizer;
-import java.util.TreeSet;
 
 // >>> Don't Change
 public class TopTitles extends Configured implements Tool {
@@ -108,8 +109,10 @@ public class TopTitles extends Configured implements Tool {
 // <<< Don't Change
 
     public static class TitleCountMap extends Mapper<Object, Text, Text, IntWritable> {
-        List<String> stopWords;
+    	Set<String> stopWords = new HashSet<>();
         String delimiters;
+        
+        private final static IntWritable ONE = new IntWritable(1);
 
         @Override
         protected void setup(Context context) throws IOException,InterruptedException {
@@ -119,62 +122,159 @@ public class TopTitles extends Configured implements Tool {
             String stopWordsPath = conf.get("stopwords");
             String delimitersPath = conf.get("delimiters");
 
-            this.stopWords = Arrays.asList(readHDFSFile(stopWordsPath, conf).split("\n"));
+            this.stopWords = new HashSet<>(Arrays.asList(readHDFSFile(stopWordsPath, conf).split("\n")));
             this.delimiters = readHDFSFile(delimitersPath, conf);
         }
 
 
         @Override
         public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
-        // TODO
+        	for(String word : getWordsFromLine(value.toString())) {
+        		String normalizedWord = normalizeWord(word);
+        		if(!commonWord(normalizedWord)) {
+        			context.write(new Text(normalizedWord), ONE);
+        		}
+        	}
         }
+        
+        private List<String> getWordsFromLine(String line) {
+        	List<String> wordsInLine = new ArrayList<>();
+            StringTokenizer tokenizer = new StringTokenizer(line, delimiters);
+            
+            while(tokenizer.hasMoreElements()) {
+            	wordsInLine.add(tokenizer.nextToken());
+            }
+            return wordsInLine;
+        }
+        
+    	private String normalizeWord(String word) {
+    		return word.toLowerCase().trim();
+    	}
+    	
+    	private boolean commonWord(String token) {
+    		return stopWords.contains(token);
+    	}
     }
 
     public static class TitleCountReduce extends Reducer<Text, IntWritable, Text, IntWritable> {
         @Override
         public void reduce(Text key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
-            // TODO
-        }
+        	int sum = 0;
+        	for(IntWritable count : values) {
+        		sum += count.get();
+        	}
+        	context.write(key, new IntWritable(sum));        }
     }
 
     public static class TopTitlesMap extends Mapper<Text, Text, NullWritable, TextArrayWritable> {
         Integer N;
-        // TODO
+        private TopXTreeSet<WordCountPair> topTitleSet;
 
         @Override
         protected void setup(Context context) throws IOException,InterruptedException {
             Configuration conf = context.getConfiguration();
             this.N = conf.getInt("N", 10);
+            this.topTitleSet = new TopXTreeSet<>(N);
         }
 
         @Override
         public void map(Text key, Text value, Context context) throws IOException, InterruptedException {
-            // TODO
+        	Integer count = Integer.parseInt(value.toString());
+        	String word = key.toString();
+        	topTitleSet.add(WordCountPair.of(count, word));
         }
 
         @Override
         protected void cleanup(Context context) throws IOException, InterruptedException {
-            // TODO
+            for(WordCountPair pair : topTitleSet) {
+            	context.write(NullWritable.get(), createEmitValue(pair));
+            }
         }
+
+		private TextArrayWritable createEmitValue(WordCountPair pair) {
+			String[] strings = {pair.getWord(), pair.getCount().toString()};
+			return new TextArrayWritable(strings);
+		}
     }
 
     public static class TopTitlesReduce extends Reducer<NullWritable, TextArrayWritable, Text, IntWritable> {
         Integer N;
-        // TODO
+        private TopXTreeSet<WordCountPair> topTitleSet;
 
         @Override
         protected void setup(Context context) throws IOException,InterruptedException {
             Configuration conf = context.getConfiguration();
             this.N = conf.getInt("N", 10);
+            this.topTitleSet = new TopXTreeSet<>(N);
         }
 
         @Override
         public void reduce(NullWritable key, Iterable<TextArrayWritable> values, Context context) throws IOException, InterruptedException {
-            // TODO
+        	for(TextArrayWritable pair : values) {
+        		topTitleSet.add(wordCountPair(pair));
+        	}
+        	
+        	for(WordCountPair pair:topTitleSet) {
+        		context.write(new Text(pair.getWord()), new IntWritable(pair.getCount()));
+        	}
         }
+
+		private WordCountPair wordCountPair(TextArrayWritable input) {
+			Text[] pair = (Text[]) input.toArray();
+        	Integer count = Integer.parseInt(pair[1].toString());
+        	String word = pair[0].toString();
+        	return new WordCountPair(count, word);
+		}
+        
     }
 
 }
+
+class TopXTreeSet<E> extends TreeSet<E> {
+	
+	private final int limit;
+	
+	public TopXTreeSet(int limit) {
+		this.limit = limit;
+	}
+	
+	@Override
+	public boolean add(E e) {
+		boolean addSuccess = super.add(e);
+		if(addSuccess) {
+			reduceToLimit();
+		}
+		return addSuccess;
+	}
+
+	private void reduceToLimit() {
+		if(size() > limit) {
+			remove(first());
+		}
+	}
+	
+}
+
+class WordCountPair extends Pair<Integer, String> {
+
+	public WordCountPair(Integer first, String second) {
+		super(first, second);
+	}
+	
+	public static WordCountPair of(Integer first, String second) {
+		return new WordCountPair(first, second);
+	}
+	
+	public Integer getCount() {
+		return first;
+	}
+	
+	public String getWord() {
+		return second;
+	}
+	
+}
+
 
 // >>> Don't Change
 class Pair<A extends Comparable<? super A>,

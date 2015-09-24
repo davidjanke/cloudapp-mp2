@@ -1,5 +1,13 @@
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.StringTokenizer;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -14,13 +22,6 @@ import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.util.Arrays;
-import java.util.List;
-import java.util.StringTokenizer;
 
 // >>> Don't Change
 public class TitleCount extends Configured implements Tool {
@@ -66,8 +67,10 @@ public class TitleCount extends Configured implements Tool {
 // <<< Don't Change
 
     public static class TitleCountMap extends Mapper<Object, Text, Text, IntWritable> {
-        List<String> stopWords;
+        Set<String> stopWords = new HashSet<>();
         String delimiters;
+        
+        private final static IntWritable ONE = new IntWritable(1);
 
         @Override
         protected void setup(Context context) throws IOException,InterruptedException {
@@ -77,21 +80,49 @@ public class TitleCount extends Configured implements Tool {
             String stopWordsPath = conf.get("stopwords");
             String delimitersPath = conf.get("delimiters");
 
-            this.stopWords = Arrays.asList(readHDFSFile(stopWordsPath, conf).split("\n"));
+            stopWords = new HashSet<>(Arrays.asList(readHDFSFile(stopWordsPath, conf).split("\n")));
             this.delimiters = readHDFSFile(delimitersPath, conf);
         }
 
 
         @Override
         public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
-            // TODO
+        	for(String word : getWordsFromLine(value.toString())) {
+        		String normalizedWord = normalizeWord(word);
+        		if(!commonWord(normalizedWord)) {
+        			context.write(new Text(normalizedWord), ONE);
+        		}
+        	}
         }
+        
+        private List<String> getWordsFromLine(String line) {
+        	List<String> wordsInLine = new ArrayList<>();
+            StringTokenizer tokenizer = new StringTokenizer(line, delimiters);
+            
+            while(tokenizer.hasMoreElements()) {
+            	wordsInLine.add(tokenizer.nextToken());
+            }
+            return wordsInLine;
+        }
+        
+    	private String normalizeWord(String word) {
+    		return word.toLowerCase().trim();
+    	}
+    	
+    	private boolean commonWord(String token) {
+    		return stopWords.contains(token);
+    	}
+        
     }
 
     public static class TitleCountReduce extends Reducer<Text, IntWritable, Text, IntWritable> {
         @Override
         public void reduce(Text key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
-            // TODO
+        	int sum = 0;
+        	for(IntWritable count : values) {
+        		sum += count.get();
+        	}
+        	context.write(key, new IntWritable(sum));
         }
     }
 }
