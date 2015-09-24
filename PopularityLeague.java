@@ -222,8 +222,8 @@ public class PopularityLeague extends Configured implements Tool {
 		}
 
 		private LinkCount linkCount(IntArrayWritable linkCount) {
-			Integer[] pair = (Integer[]) linkCount.toArray();
-			return LinkCount.of(pair[1], pair[0]);
+			IntWritable[] pair = (IntWritable[]) linkCount.toArray();
+			return LinkCount.of(pair[1].get(), pair[0].get());
 		}
     }
 }
