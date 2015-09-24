@@ -108,7 +108,7 @@ public class PopularityLeague extends Configured implements Tool {
     
     public static Collection<Integer> getLeaugeIds(String leagueIds) {
     	Collection<Integer> ids = new ArrayList<>();
-    	for(String idString : leagueIds.split(",")) {
+    	for(String idString : leagueIds.split("\n")) {
     		ids.add(Integer.parseInt(idString));
     	}
     	return ids;
