@@ -87,7 +87,7 @@ public class PopularityLeague extends Configured implements Tool {
         jobB.setInputFormatClass(KeyValueTextInputFormat.class);
         jobB.setOutputFormatClass(TextOutputFormat.class);
 
-        jobB.setJarByClass(TopTitles.class);
+        jobB.setJarByClass(PopularityLeague.class);
         return jobB.waitForCompletion(true) ? 0 : 1;
     }
 
