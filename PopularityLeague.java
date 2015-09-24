@@ -67,7 +67,7 @@ public class PopularityLeague extends Configured implements Tool {
         FileInputFormat.setInputPaths(jobA, new Path(args[0]));
         FileOutputFormat.setOutputPath(jobA, tmpPath);
 
-        jobA.setJarByClass(TopPopularLinks.class);
+        jobA.setJarByClass(PopularityLeague.class);
         jobA.waitForCompletion(true);
 
         Job jobB = Job.getInstance(conf, "League rank");
