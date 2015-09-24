@@ -233,7 +233,7 @@ public class TopTitleStatistics extends Configured implements Tool {
         private Integer createFakeVar(Integer mean) {
         	int sigma = 0;
         	for(Integer count : topTitleSet) {
-        		sigma += ((mean - count) ^ 2);
+        		sigma += ((mean - count) ^ (mean - count));
         	}
 			return (int) (sigma / topTitleSet.size());
 		}
