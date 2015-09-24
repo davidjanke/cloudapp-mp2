@@ -58,7 +58,7 @@ public class PopularityLeague extends Configured implements Tool {
         fs.delete(tmpPath, true);
 
         Job jobA = Job.getInstance(conf, "Link Count");
-        jobA.setOutputKeyClass(Text.class);
+        jobA.setOutputKeyClass(IntWritable.class);
         jobA.setOutputValueClass(IntWritable.class);
 
         jobA.setMapperClass(LinkCountMap.class);
@@ -70,8 +70,8 @@ public class PopularityLeague extends Configured implements Tool {
         jobA.setJarByClass(TopPopularLinks.class);
         jobA.waitForCompletion(true);
 
-        Job jobB = Job.getInstance(conf, "Top Links");
-        jobB.setOutputKeyClass(Text.class);
+        Job jobB = Job.getInstance(conf, "League rank");
+        jobB.setOutputKeyClass(IntWritable.class);
         jobB.setOutputValueClass(IntWritable.class);
 
         jobB.setMapOutputKeyClass(NullWritable.class);
@@ -173,6 +173,7 @@ public class PopularityLeague extends Configured implements Tool {
     		
     	}
     }
+    
     public static class LeagueMap extends Mapper<Text, Text, NullWritable, IntArrayWritable> {
         TreeSet<LinkCount> topLinks = new TreeSet<>();
 
