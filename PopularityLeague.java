@@ -4,6 +4,7 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.StringTokenizer;
@@ -27,6 +28,11 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
+
+import com.google.common.collect.BoundType;
+import com.google.common.collect.TreeMultiset;
+
+import PopularityTest.LinkCount;
 
 public class PopularityLeague extends Configured implements Tool {
 
@@ -196,7 +202,7 @@ public class PopularityLeague extends Configured implements Tool {
 	}
 
 	public static class LeagueReduce extends Reducer<NullWritable, IntArrayWritable, IntWritable, IntWritable> {
-		TreeSet<LinkCount> topLinks = new TreeSet<>();
+		TreeMultiset<LinkCount> topLinks = TreeMultiset.create(new LinkCountComparator());
 
 		@Override
 		protected void reduce(NullWritable key, Iterable<IntArrayWritable> values, Context context) throws IOException, InterruptedException {
@@ -204,7 +210,7 @@ public class PopularityLeague extends Configured implements Tool {
 				topLinks.add(linkCount(linkCountValue));
 			}
 
-			for(LinkCount linkCount : topLinks.descendingSet()) {
+			for(LinkCount linkCount : topLinks.descendingMultiset()) {
 				Integer rank = determineRank(linkCount);
 				context.write(new IntWritable(linkCount.getId()), new IntWritable(rank));
 			}
@@ -212,12 +218,7 @@ public class PopularityLeague extends Configured implements Tool {
 		}
 
 		private Integer determineRank(LinkCount linkCount) {
-			int numberOfSmallerElements = 0;
-			for(LinkCount item:topLinks) {
-				if(item.getCount() < linkCount.getCount()) {
-					numberOfSmallerElements++;
-				}
-			}
+			int numberOfSmallerElements = topLinks.headMultiset(linkCount, BoundType.OPEN).size();
 			return numberOfSmallerElements;
 		}
 
@@ -228,6 +229,14 @@ public class PopularityLeague extends Configured implements Tool {
 	}
 }
 
+class LinkCountComparator implements Comparator<LinkCount> {
+
+	@Override
+	public int compare(LinkCount o1, LinkCount o2) {
+		return o1.getCount().compareTo(o2.getCount());
+	}
+	
+}
 class LinkCount extends Pair<Integer, Integer> {
 
 	public LinkCount(Integer count, Integer id) {
