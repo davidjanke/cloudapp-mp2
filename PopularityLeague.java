@@ -32,8 +32,6 @@ import org.apache.hadoop.util.ToolRunner;
 import com.google.common.collect.BoundType;
 import com.google.common.collect.TreeMultiset;
 
-import PopularityTest.LinkCount;
-
 public class PopularityLeague extends Configured implements Tool {
 
 	public static void main(String[] args) throws Exception {
