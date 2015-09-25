@@ -200,7 +200,7 @@ public class PopularityLeague extends Configured implements Tool {
 	}
 
 	public static class LeagueReduce extends Reducer<NullWritable, IntArrayWritable, IntWritable, IntWritable> {
-		TreeMultiset<LinkCount> topLinks = TreeMultiset.create(new LinkCountComparator());
+		Collection<LinkCount> topLinks = new ArrayList<>();
 
 		@Override
 		protected void reduce(NullWritable key, Iterable<IntArrayWritable> values, Context context) throws IOException, InterruptedException {
@@ -208,7 +208,7 @@ public class PopularityLeague extends Configured implements Tool {
 				topLinks.add(linkCount(linkCountValue));
 			}
 
-			for(LinkCount linkCount : topLinks.descendingMultiset()) {
+			for(LinkCount linkCount : topLinks) {
 				Integer rank = determineRank(linkCount);
 				context.write(new IntWritable(linkCount.getId()), new IntWritable(rank));
 			}
@@ -216,7 +216,13 @@ public class PopularityLeague extends Configured implements Tool {
 		}
 
 		private Integer determineRank(LinkCount linkCount) {
-			int numberOfSmallerElements = topLinks.headMultiset(linkCount, BoundType.OPEN).size();
+			int numberOfSmallerElements = 0;
+			for(LinkCount lc : topLinks) {
+					if(linkCount.getCount() > lc.getCount()) {
+						numberOfSmallerElements++;
+					}
+						
+			}
 			return numberOfSmallerElements;
 		}
 
